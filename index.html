@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=h1, initial-scale=1.0">
+    <title>CSV to JSON converter</title>
+</head>
+<body>
+    <h1>Daniel Xean Benolerao</h1>
+    <h3><i>IT 3206N T Th 3:00-5:30</i></h3>
+    <br><br>
+    <h1>CSV to JSON</h1>
+    <h2>1. Upload CSV</h2>
+        <input type="file" id="CSVFile" accept=".csv">
+        <button type="button" onclick="convert()">Convert CSV to JSON</button>
+    <h2>2. JSON Display</h2>
+        <pre id="jsonDisplay">Upload a CSV file and click "Convert CSV to JSON".</pre>
+    <script>
+        
+        let jsonResult = [];
+
+        function parseCSVLine(line) {
+            const values = [];
+            let value = "";
+            let insideQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const character = line[i];
+
+                if (character === '"') {
+                    if (insideQuotes && line[i + 1] === '"') {
+                        value += '"';
+                        i++;
+                    } else {
+                        insideQuotes = !insideQuotes;
+                    }
+                } else if (character === "," && !insideQuotes) {
+                    values.push(value);
+                    value = "";
+                } else {
+                    value += character;
+                }
+            }
+
+            values.push(value);
+            return values;
+        }
+
+        function capitalizeName(value) {
+            return value.trim().toLowerCase()
+                .replace(/\b[a-z]/g, letter => letter.toUpperCase());
+        }
+
+        function convert() {
+            const file = document.getElementById("CSVFile").files[0];
+            const output = document.getElementById("jsonDisplay");
+
+            if (!file) {
+                output.textContent = "Please upload a CSV file first.";
+                return;
+            }
+
+            const reader = new FileReader();
+
+            reader.onload = function(event) {
+                const csvText = event.target.result.replace(/^\uFEFF/, "").trim();
+
+                if (!csvText) {
+                    output.textContent = "The CSV file is empty.";
+                    return;
+                }
+
+                const lines = csvText.split(/\r?\n/);
+                const headers = parseCSVLine(lines[0]).map(h => h.trim());
+                const requiredFields = [
+                    "student_id", "first_name", "last_name", "course",
+                    "year_level", "email", "tuition_balance"
+                ];
+
+                const missingFields = requiredFields.filter(field => !headers.includes(field));
+
+                if (missingFields.length > 0) {
+                    output.textContent = "Missing CSV column(s): " + missingFields.join(", ");
+                    return;
+                }
+
+                const rows = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    if (lines[i].trim() === "") continue;
+
+                    const values = parseCSVLine(lines[i]);
+                    const row = {};
+
+                    headers.forEach((header, index) => {
+                        row[header] = (values[index] ?? "").trim();
+                    });
+
+                    rows.push(row);
+                }
+
+                const programNames = {
+                    "BSIT": "Bachelor of Science in Information Technology",
+                    "BSCS": "Bachelor of Science in Computer Science"
+                };
+
+                try {
+                    jsonResult = rows.map((row, index) => {
+                        const studentId = Number.parseInt(row.student_id, 10);
+                        const yearLevel = Number.parseInt(row.year_level, 10);
+                        const tuitionBalance = Number(row.tuition_balance);
+                        const courseCode = row.course.trim().toUpperCase();
+
+                        if (!Number.isInteger(studentId) ||
+                            !Number.isInteger(yearLevel) ||
+                            row.tuition_balance === "" ||
+                            !Number.isFinite(tuitionBalance)) {
+                            throw new Error("Invalid number in CSV row " + (index + 2));
+                        }
+
+                        if (!programNames[courseCode]) {
+                            throw new Error("Unknown course code in CSV row " + (index + 2) +
+                                ": " + row.course);
+                        }
+
+                        return {
+                            studentId: studentId,
+                            firstName: capitalizeName(row.first_name),
+                            lastName: capitalizeName(row.last_name),
+                            program: programNames[courseCode],
+                            yearLevel: yearLevel,
+                            emailAddress: row.email.trim().toLowerCase(),
+                            outstandingBalance: tuitionBalance
+                        };
+                    });
+
+                    output.textContent = JSON.stringify(jsonResult, null, 4);
+                } catch (error) {
+                    jsonResult = [];
+                    output.textContent = "Error: " + error.message;
+                }
+            };
+
+            reader.onerror = function() {
+                jsonResult = [];
+                output.textContent = "Unable to read the selected CSV file.";
+            };
+
+            reader.readAsText(file);
+        }
+
+    </script>
+</body>
+</html>
